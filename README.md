@@ -1,4 +1,4 @@
-sync-wave
+hidemyass-parser
 =========
 
-import wave data from site to GAE datastore
+grab proxy servers from hidemyass.com
