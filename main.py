@@ -1,4 +1,5 @@
 """A simple webapp2 server."""
+import json
 import re
 import webapp2
 import urllib2
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 from globals import USER_AGENT 
 from globals import URL_BASE 
+from globals import X_PARSE_APPLICATION_ID 
+from globals import X_PARSE_REST_API_KEY 
+from globals import URL_PARSE 
 
 from itertools import izip
 
@@ -47,6 +51,27 @@ class ParseHMA:
         for p in self.pages:
             r = self.parse_ip_port(p)
             self.proxies += r
+
+        self.proxies_json = []
+        self.list_to_json()
+
+    def list_to_json(self):
+        for p in self.proxies:
+            self.proxies_json.append({"ip":p})
+
+    def put_parse(self):
+        request = urllib2.Request(URL_PARSE)
+        request.add_header('X-Parse-Application-Id', X_PARSE_APPLICATION_ID)
+        request.add_header('X-Parse-REST-API-Key', X_PARSE_REST_API_KEY)
+        request.add_header('Content-Type', 'application/json')
+        data = json.dumps(self.proxies_json)
+        data = json.dumps([{"ip":"123123123ggiiii"},{"ip":"iia1sgsdg"}])
+        response = urllib2.urlopen(request, data=data)
+        logger.info(response.read())
+
+
+               
+
 
     def get_page_dbg(self, url):
          return open("text.html","rb")
@@ -83,7 +108,6 @@ class ParseHMA:
         return self.pages 
 
     def parse_pagination(self, page):
-        htmlparser = etree.HTMLParser()
         tree = lxml.html.fromstring(page)
 
         div_pagination = tree.xpath('//div[@class="pagination"]//li//a/@href')
@@ -92,13 +116,12 @@ class ParseHMA:
         return div_pagination
 
 
-    def parse_ip_port(self, response):
+    def parse_ip_port(self, page):
         def pairwise(iterable):
             a = iter(iterable)
             return izip(a, a)
 
-        htmlparser = etree.HTMLParser()
-        tree = lxml.html.fromstring(response)
+        tree = lxml.html.fromstring(page)
         
 
         td_ip_port = tree.xpath('//table//td[position()>1 and position()<4]')
@@ -150,6 +173,7 @@ class mainPage(webapp2.RequestHandler):
         hma = ParseHMA()
         logger.info(hma.proxies)
         logger.info(len(hma.proxies))
+        hma.put_parse()
         return 
  
 application = webapp2.WSGIApplication([
