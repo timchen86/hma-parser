@@ -1,4 +1,3 @@
-hidemyass-parser
+hma-parser
 =========
-
-grab proxy servers from hidemyass.com
+grab proxy servers from HMA
