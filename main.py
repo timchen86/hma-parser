@@ -85,6 +85,8 @@ class ParseHMA:
                 dict_request = {"requests":[]}
                 i=0
 
+        list_dict_request.append(dict_request)
+
         return list_dict_request
 
 
