@@ -181,7 +181,7 @@ class ParseHMA:
                 re_response_time = re.search(r'width:(\d*)%',response_time_)
                 response_time = int(re_response_time.group(1))
 
-                connection_time_ = td_rtime.find('div').find('div').attrib.get("style")
+                connection_time_ = td_ctime.find('div').find('div').attrib.get("style")
                 re_connection_time = re.search(r'width:(\d*)%',connection_time_)
                 connection_time = int(re_connection_time.group(1))
 
