@@ -31,6 +31,7 @@ from globals import IF_DEBUG
 
 import itertools
 from itertools import tee, izip
+from itertools import izip_longest
 
 USER_AGENTS = [
     'Mozilla/5.0 (X11; Linux x86_64; rv:10.0.2) Gecko/20100101 Firefox/10.0.2',
@@ -48,9 +49,13 @@ USER_AGENTS = [
 class ParseHMA:
     def __init__(self):
         self.pages = []
-        self.pages.append(self.get_main_page())
-        self.pagination = self.parse_pagination(self.pages[0])
-        self.get_pages()
+        if IF_DEBUG:
+            self.get_pages_dbg()
+        else:
+            self.pages.append(self.get_main_page())
+            self.pagination = self.parse_pagination(self.pages[0])
+            self.get_pages()
+
         self.proxies = []
 
         for p in self.pages:
@@ -64,13 +69,14 @@ class ParseHMA:
         list_dict_request = []
 
         dict_request = {"requests":[]}
+        # FIXME
+        # make it neat
         i = 0
         for p in proxy_list:
-
             item = {"method": "POST",
                     "path": URL_PARSE_BATCH_PROXY,
-                    "body": {"ip":p}}
-
+                    "body": p}
+            
             dict_request["requests"].append(item)
             i+=1
 
@@ -92,8 +98,6 @@ class ParseHMA:
             response = urllib2.urlopen(request, data=data)
             logger.info(response.read())
 
-    def get_page_dbg(self, url):
-         return open("text.html","rb")
         
     def get_main_page(self):
         request = urllib2.Request(URL_BASE)
@@ -107,6 +111,8 @@ class ParseHMA:
             response_text = response.read()
             return response_text
 
+    def get_pages_dbg(self):
+        self.pages.append(open("text.html","rb").read())
  
     def get_pages(self):
         if IF_DEBUG:
@@ -147,16 +153,38 @@ class ParseHMA:
             next(b, None)
             return izip(a, b)
 
-        tree = lxml.html.fromstring(page)
-        #td_ip_port = tree.xpath('//table//td[position()>1 and position()<4]')
-        td_ip_port = tree.xpath('//table//td')
+        def chunks(l, n):
+            """ Yield successive n-sized chunks from l.
+            """
+            for i in xrange(0, len(l), n):
+                yield l[i:i+n]
 
+        def grouper(n, iterable, padvalue=None):
+            return izip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
+
+        tree = lxml.html.fromstring(page)
+        #td_ip_port = tree.xpath('//table//td[(position()="2") and (position()="3")]')
+        td_ip_port_ = tree.xpath('//table//td')
+        td_ip_port_ = grouper(8, td_ip_port_)
+
+        td_ip_port = [ [x[1],x[2],x[4],x[5]] for x in td_ip_port_ ]
         list_ip_port = []
 
-        for td_ip, td_port in pairwise(td_ip_port[2:]):
+        for td_ip, td_port, td_rtime, td_ctime in td_ip_port:
             ip = ""
             port = ""
+            response_time=0
+            connection_time=0
+
             try:
+                response_time_ = td_rtime.find('div').find('div').attrib.get("style")
+                re_response_time = re.search(r'width:(\d*)%',response_time_)
+                response_time = int(re_response_time.group(1))
+
+                connection_time_ = td_rtime.find('div').find('div').attrib.get("style")
+                re_connection_time = re.search(r'width:(\d*)%',connection_time_)
+                connection_time = int(re_connection_time.group(1))
+
                 ip_root_span = td_ip.find('span')
                 ip_style = ip_root_span.find('style').text.strip().split("\n")
                 # .drc9{display:inline}
@@ -181,10 +209,18 @@ class ParseHMA:
                 pass
 
             if( ip and port ):
-                list_ip_port.append("%s:%s"%(ip,port))
+                #list_ip_port.append("%s:%s"%(ip,port))
+                list_ip_port.append( 
+                        {
+                            "ip":ip,
+                            "port":port,
+                            "response_time":response_time,
+                            "connection_time":connection_time
+                            }
+                        )
         
-        #logger.info(list_ip_port)
-        #logger.info(len(list_ip_port))
+        logger.info(list_ip_port)
+        logger.info(len(list_ip_port))
         return list_ip_port
         
 
