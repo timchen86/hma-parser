@@ -24,9 +24,13 @@ from globals import USER_AGENT
 from globals import URL_BASE 
 from globals import X_PARSE_APPLICATION_ID 
 from globals import X_PARSE_REST_API_KEY 
-from globals import URL_PARSE 
+from globals import URL_PARSE_PROXY
+from globals import URL_PARSE_BATCH 
+from globals import URL_PARSE_BATCH_PROXY
+from globals import IF_DEBUG
 
-from itertools import izip
+import itertools
+from itertools import tee, izip
 
 USER_AGENTS = [
     'Mozilla/5.0 (X11; Linux x86_64; rv:10.0.2) Gecko/20100101 Firefox/10.0.2',
@@ -48,30 +52,45 @@ class ParseHMA:
         self.pagination = self.parse_pagination(self.pages[0])
         self.get_pages()
         self.proxies = []
+
         for p in self.pages:
             r = self.parse_ip_port(p)
             self.proxies += r
 
-        self.proxies_json = []
-        self.list_to_json()
+        batches = self.make_batch(self.proxies)
+        self.put_parse(batches)
 
-    def list_to_json(self):
-        for p in self.proxies:
-            self.proxies_json.append({"ip":p})
+    def make_batch(self, proxy_list):
+        list_dict_request = []
 
-    def put_parse(self):
-        request = urllib2.Request(URL_PARSE)
+        dict_request = {"requests":[]}
+        i = 0
+        for p in proxy_list:
+
+            item = {"method": "POST",
+                    "path": URL_PARSE_BATCH_PROXY,
+                    "body": {"ip":p}}
+
+            dict_request["requests"].append(item)
+            i+=1
+
+            if i == 20:
+                list_dict_request.append(dict_request)
+                dict_request = {"requests":[]}
+                i=0
+
+        return list_dict_request
+
+
+    def put_parse(self, batches):
+        request = urllib2.Request(URL_PARSE_BATCH)
         request.add_header('X-Parse-Application-Id', X_PARSE_APPLICATION_ID)
         request.add_header('X-Parse-REST-API-Key', X_PARSE_REST_API_KEY)
         request.add_header('Content-Type', 'application/json')
-        data = json.dumps(self.proxies_json)
-        data = json.dumps([{"ip":"123123123ggiiii"},{"ip":"iia1sgsdg"}])
-        response = urllib2.urlopen(request, data=data)
-        logger.info(response.read())
-
-
-               
-
+        for b in batches:
+            data = json.dumps(b)
+            response = urllib2.urlopen(request, data=data)
+            logger.info(response.read())
 
     def get_page_dbg(self, url):
          return open("text.html","rb")
@@ -90,8 +109,14 @@ class ParseHMA:
 
  
     def get_pages(self):
+        if IF_DEBUG:
+            pagination = self.pagination[0:1]
+        else:
+            pagination = self.pagination
 
-        for p in self.pagination:
+        #logging.info(len(pagination))
+    
+        for p in pagination:
             url = urlparse.urljoin(URL_BASE, p)
             request = urllib2.Request(url)
             request.add_header('User-Agent',random.choice(USER_AGENTS))
@@ -118,13 +143,13 @@ class ParseHMA:
 
     def parse_ip_port(self, page):
         def pairwise(iterable):
-            a = iter(iterable)
-            return izip(a, a)
+            a, b = tee(iterable)
+            next(b, None)
+            return izip(a, b)
 
         tree = lxml.html.fromstring(page)
-        
-
-        td_ip_port = tree.xpath('//table//td[position()>1 and position()<4]')
+        #td_ip_port = tree.xpath('//table//td[position()>1 and position()<4]')
+        td_ip_port = tree.xpath('//table//td')
 
         list_ip_port = []
 
@@ -155,8 +180,8 @@ class ParseHMA:
             except:
                 pass
 
-            #logger.info("%s:%s"%(ip,port))
-            list_ip_port.append("%s:%s"%(ip,port))
+            if( ip and port ):
+                list_ip_port.append("%s:%s"%(ip,port))
         
         #logger.info(list_ip_port)
         #logger.info(len(list_ip_port))
@@ -171,9 +196,6 @@ class mainPage(webapp2.RequestHandler):
 
     def get(self):
         hma = ParseHMA()
-        logger.info(hma.proxies)
-        logger.info(len(hma.proxies))
-        hma.put_parse()
         return 
  
 application = webapp2.WSGIApplication([
