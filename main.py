@@ -1,4 +1,5 @@
 """A simple webapp2 server."""
+import socket
 import json
 import re
 import webapp2
@@ -20,7 +21,6 @@ from BeautifulSoup import BeautifulSoup
 import logging
 logger = logging.getLogger(__name__)
 
-from globals import USER_AGENT 
 from globals import URL_BASE 
 from globals import X_PARSE_APPLICATION_ID 
 from globals import X_PARSE_REST_API_KEY 
@@ -49,6 +49,8 @@ USER_AGENTS = [
 
 class ParseHMA:
     def __init__(self):
+        #socket.setdefaulttimeout(10)
+
         self.pages = []
         if IF_DEBUG:
             self.get_pages_dbg()
@@ -90,6 +92,33 @@ class ParseHMA:
 
         return list_dict_request
 
+    def http_get_retry(howmany):
+        def try_it(func):
+            def f(self, url):
+                attempts = 0
+                while attempts < howmany:
+                    try:
+                        return func(self, url)
+                    except:
+                        attempts += 1
+                raise BaseException("http_get() reaches max retry")
+            return f
+        return try_it
+
+
+    @http_get_retry(3)
+    def http_get(self, url):
+        logging.info("http_get(): %s" % url)
+        request = urllib2.Request(url)
+        request.add_header('User-Agent',random.choice(USER_AGENTS))
+        response = urllib2.urlopen(request, timeout=10)
+        response_code = response.getcode()
+        if response_code != 200:
+            raise BaseException("response_code != 200")
+        else:
+            response_text = response.read()
+            return response_text
+
 
     def put_parse(self, batches):
         request = urllib2.Request(URL_PARSE_BATCH)
@@ -103,16 +132,7 @@ class ParseHMA:
 
         
     def get_main_page(self):
-        request = urllib2.Request(URL_BASE)
-        request.add_header('User-Agent',random.choice(USER_AGENTS))
-        response = urllib2.urlopen(request)
-        response_code = response.getcode()
-        if response_code != 200:
-            response_text = ""
-            return
-        else:
-            response_text = response.read()
-            return response_text
+        return self.http_get(URL_BASE)
 
     def get_pages_dbg(self):
         self.pages.append(open("text.html","rb").read())
@@ -127,15 +147,7 @@ class ParseHMA:
     
         for p in pagination:
             url = urlparse.urljoin(URL_BASE, p)
-            request = urllib2.Request(url)
-            request.add_header('User-Agent',random.choice(USER_AGENTS))
-            response = urllib2.urlopen(request)
-            response_code = response.getcode()
-
-            if response_code != 200:
-                response_text = ""
-            else:
-                response_text = response.read()
+            response_text = self.http_get(url)
 
             self.pages.append(response_text)
 
