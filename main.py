@@ -28,6 +28,7 @@ from globals import URL_PARSE_PROXY
 from globals import URL_PARSE_BATCH 
 from globals import URL_PARSE_BATCH_PROXY
 from globals import IF_DEBUG
+from globals import PARSE_BATCH_LIMIT
 
 import itertools
 from itertools import tee, izip
@@ -80,7 +81,7 @@ class ParseHMA:
             dict_request["requests"].append(item)
             i+=1
 
-            if i == 20:
+            if i == PARSE_BATCH_LIMIT:
                 list_dict_request.append(dict_request)
                 dict_request = {"requests":[]}
                 i=0
