@@ -18,8 +18,12 @@ import sys
 sys.path.insert(0, 'libs')
 from BeautifulSoup import BeautifulSoup 
 
+import requests
+from requests.adapters import HTTPAdapter
+
 import logging
 logger = logging.getLogger(__name__)
+
 
 from globals import URL_BASE 
 from globals import X_PARSE_APPLICATION_ID 
@@ -29,7 +33,11 @@ from globals import URL_PARSE_BATCH
 from globals import URL_PARSE_BATCH_PROXY
 from globals import IF_DEBUG
 from globals import PARSE_BATCH_LIMIT
+from globals import REQUESTS_MAX_RETRIES
+from globals import REQUESTS_TIMEOUT
+from globals import URL_PARSE_QUERY_LIMIT
 
+    
 import itertools
 from itertools import tee, izip
 from itertools import izip_longest
@@ -50,6 +58,22 @@ USER_AGENTS = [
 class ParseHMA:
     def __init__(self):
         #socket.setdefaulttimeout(10)
+    
+        # http requests
+        self.session = requests.Session()
+        self.session.mount('http://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
+        self.session.mount('https://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
+        headers = {
+                'X-Parse-Application-Id': X_PARSE_APPLICATION_ID, 
+                'X-Parse-REST-API-Key': X_PARSE_REST_API_KEY,
+                'Content-Type': 'application/json'}
+        self.session.headers = headers
+
+
+        #
+        current_proxy = self.get_proxy()
+
+        logging.info("len of current_proxy: %d", len(current_proxy))
 
         self.pages = []
         if IF_DEBUG:
@@ -59,77 +83,80 @@ class ParseHMA:
             self.pagination = self.parse_pagination(self.pages[0])
             self.get_pages()
 
-        self.proxies = []
+        new_proxy = []
 
         for p in self.pages:
             r = self.parse_ip_port(p)
-            self.proxies += r
+            new_proxy += r
 
-        batches = self.make_batch(self.proxies)
-        self.put_parse(batches)
 
-    def make_batch(self, proxy_list):
-        list_dict_request = []
+        if new_proxy:
+            self.post_parse(new_proxy, if_delete=False)
+            self.post_parse(current_proxy, if_delete=True)
+
+    def make_batch(self, list_, if_delete=False):
+        list_request = []
 
         dict_request = {"requests":[]}
         # FIXME
         # make it neat
         i = 0
-        for p in proxy_list:
-            item = {"method": "POST",
-                    "path": URL_PARSE_BATCH_PROXY,
-                    "body": p}
-            
+        for l in list_:
+            if if_delete:
+                item = {"method": "DELETE",
+                        "path": URL_PARSE_BATCH_PROXY+"/"+l.get("objectId")}
+            else:
+                item = {"method": "POST",
+                        "path": URL_PARSE_BATCH_PROXY,
+                        "body": l}
+                
             dict_request["requests"].append(item)
             i+=1
 
             if i == PARSE_BATCH_LIMIT:
-                list_dict_request.append(dict_request)
+                list_request.append(dict_request)
                 dict_request = {"requests":[]}
                 i=0
 
-        list_dict_request.append(dict_request)
+        if dict_request.get("requests"):
+            list_request.append(dict_request)
 
-        return list_dict_request
-
-    def http_get_retry(howmany):
-        def try_it(func):
-            def f(self, url):
-                attempts = 0
-                while attempts < howmany:
-                    try:
-                        return func(self, url)
-                    except:
-                        attempts += 1
-                raise BaseException("http_get() reaches max retry")
-            return f
-        return try_it
-
-
-    @http_get_retry(3)
+        return list_request
+    
     def http_get(self, url):
-        logging.info("http_get(): %s" % url)
-        request = urllib2.Request(url)
-        request.add_header('User-Agent',random.choice(USER_AGENTS))
-        response = urllib2.urlopen(request, timeout=10)
-        response_code = response.getcode()
-        if response_code != 200:
-            raise BaseException("response_code != 200")
+        logging.info("http_get(): %s"%(url))
+            
+        response = self.session.get(url, timeout=REQUESTS_TIMEOUT)
+
+        if response.status_code != 200:
+            raise BaseException("http_get(): response_code != 200")
         else:
-            response_text = response.read()
-            return response_text
+            return response.text
 
+    def get_proxy(self):
+        payload = {"limit": URL_PARSE_QUERY_LIMIT}
+        response = self.session.get(URL_PARSE_PROXY, params=payload, timeout=REQUESTS_TIMEOUT)
 
-    def put_parse(self, batches):
-        request = urllib2.Request(URL_PARSE_BATCH)
-        request.add_header('X-Parse-Application-Id', X_PARSE_APPLICATION_ID)
-        request.add_header('X-Parse-REST-API-Key', X_PARSE_REST_API_KEY)
-        request.add_header('Content-Type', 'application/json')
+        if response.status_code != 200:
+            logging.error(response.text)
+            raise BaseException("get_proxy(): response_code != 200")
+        else:
+            result = response.json()
+            return result.get("results")
+
+    def post_parse(self, proxy, if_delete):
+        logging.info("post_parse()")
+
+        batches = self.make_batch(proxy, if_delete)
+
         for b in batches:
             data = json.dumps(b)
-            response = urllib2.urlopen(request, data=data)
-            logger.info(response.read())
-
+            response = self.session.post(URL_PARSE_BATCH, data=data, timeout=REQUESTS_TIMEOUT)
+            logger.info(response.text)
+            if response.status_code != 200:
+                raise BaseException("response_code != 200")
+            else:
+                pass
         
     def get_main_page(self):
         return self.http_get(URL_BASE)
