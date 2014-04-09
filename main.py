@@ -64,6 +64,7 @@ class ParseHMA:
         self.session.mount('http://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
         self.session.mount('https://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
         headers = {
+                'User-Agent': random.choice(USER_AGENTS),
                 'X-Parse-Application-Id': X_PARSE_APPLICATION_ID, 
                 'X-Parse-REST-API-Key': X_PARSE_REST_API_KEY,
                 'Content-Type': 'application/json'}
