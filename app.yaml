@@ -7,10 +7,10 @@ threadsafe: true
 handlers:
 - url: /.*
   script: main.application
+  login: admin
 
 inbound_services:
 - warmup
-
 
 libraries:
 - name: lxml

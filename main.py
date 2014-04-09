@@ -277,4 +277,4 @@ class mainPage(webapp2.RequestHandler):
         return 
  
 application = webapp2.WSGIApplication([
-    ('/', mainPage)], debug=True)
+    ('/update', mainPage)], debug=True)
