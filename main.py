@@ -57,9 +57,7 @@ USER_AGENTS = [
 
 class ParseHMA:
     def __init__(self):
-        #socket.setdefaulttimeout(10)
-    
-        # http requests
+        # requests: retries, user-agent and Parse id/key
         self.session = requests.Session()
         self.session.mount('http://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
         self.session.mount('https://', HTTPAdapter(max_retries=REQUESTS_MAX_RETRIES))
@@ -76,17 +74,18 @@ class ParseHMA:
 
         logging.info("len of current_proxy: %d", len(current_proxy))
 
-        self.pages = []
+        pages = []
         if IF_DEBUG:
             self.get_pages_dbg()
         else:
-            self.pages.append(self.get_main_page())
-            self.pagination = self.parse_pagination(self.pages[0])
-            self.get_pages()
+            main_page = self.get_main_page()
+            pagination = self.parse_pagination(main_page)
+            pages_after = self.get_pages(pagination)
+            pages = [main_page] + pages_after
 
         new_proxy = []
 
-        for p in self.pages:
+        for p in pages:
             r = self.parse_ip_port(p)
             new_proxy += r
 
@@ -164,23 +163,23 @@ class ParseHMA:
         return self.http_get(URL_BASE)
 
     def get_pages_dbg(self):
-        self.pages.append(open("text.html","rb").read())
- 
-    def get_pages(self):
-        if IF_DEBUG:
-            pagination = self.pagination[0:1]
-        else:
-            pagination = self.pagination
+        pages = []
+        pages.append(open("text.html","rb").read())
 
-        #logging.info(len(pagination))
-    
+        return pages
+ 
+    def get_pages(self, pagination):
+        if IF_DEBUG:
+            pagination = pagination[0:1]
+
+        pages = []
         for p in pagination:
             url = urlparse.urljoin(URL_BASE, p)
             response_text = self.http_get(url)
 
-            self.pages.append(response_text)
+            pages.append(response_text)
 
-        return self.pages 
+        return pages 
 
     def parse_pagination(self, page):
         tree = lxml.html.fromstring(page)
