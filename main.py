@@ -67,7 +67,7 @@ class ParseHMA:
 
         pages = []
         if IF_DEBUG:
-            self.get_pages_dbg()
+            pages.append(self.get_pages_dbg())
         else:
             main_page = self.get_main_page()
             # get other pages from main_page
@@ -146,7 +146,6 @@ class ParseHMA:
 
         for b in batches:
             data = json.dumps(b)
-            #response = self.session.post(URL_PARSE_BATCH, data=data, timeout=REQUESTS_TIMEOUT)
             response = self.http_get(URL_PARSE_BATCH, data=data)
             # should check: if all returns success
         
@@ -154,10 +153,9 @@ class ParseHMA:
         return self.http_get(URL_BASE).text
 
     def get_pages_dbg(self):
-        pages = []
-        pages.append(open("text.html","rb").read())
+        text = open("text.html","rb").read()
 
-        return pages
+        return text
  
     def get_pages(self, pagination):
         if IF_DEBUG:
@@ -201,27 +199,42 @@ class ParseHMA:
         td_ip_port_ = tree.xpath('//table//td')
         td_ip_port_ = grouper(8, td_ip_port_)
 
-        td_ip_port = [ [x[1],x[2],x[4],x[5]] for x in td_ip_port_ ]
+        #td_ip_port = [ [x[1],x[2],x[4],x[5]] for x in td_ip_port_ ]
+        td_ip_port = [ x[1:] for x in td_ip_port_ ]
         list_result = []
 
-        for td_ip, td_port, td_rtime, td_ctime in td_ip_port:
+        for td_ip, td_port, td_country, td_rtime, td_ctime, td_type, td_anonymity in td_ip_port:
             ip = ""
             port = ""
-            response_time=0
-            connection_time=0
+            country = ""
+            response_time = 0
+            connection_time = 0
+            proxy_type = ""
+            anonymity = ""
 
             try:
+                # anonymity
+                anonymity = td_anonymity.text
+
+                # proxy_type
+                proxy_type = td_type.text
+
+                # country
+                country = td_country.attrib.get("rel")
+
+                # response_time
                 response_time_ = td_rtime.find('div').find('div').attrib.get("style")
                 re_response_time = re.search(r'width:(\d*)%',response_time_)
                 response_time = int(re_response_time.group(1))
 
+                # connection_time 
                 connection_time_ = td_ctime.find('div').find('div').attrib.get("style")
                 re_connection_time = re.search(r'width:(\d*)%',connection_time_)
                 connection_time = int(re_connection_time.group(1))
 
+                # ip
                 ip_root_span = td_ip.find('span')
                 ip_style = ip_root_span.find('style').text.strip().split("\n")
-                # .drc9{display:inline}
                 ip_style_inline = [ m.group(1) for x in ip_style for m in [re.search(r'\.(.*){display:inline',x)] if m ]
 
                 ip_free_text = ip_style = ip_root_span.text
@@ -237,8 +250,9 @@ class ParseHMA:
                         ip = ip+text
                     if tail:
                         ip = ip+tail
-
+                # port
                 port = td_port.text.strip()
+
             except:
                 pass
 
@@ -246,10 +260,13 @@ class ParseHMA:
                 #list_result.append("%s:%s"%(ip,port))
                 list_result.append( 
                         {
-                            "ip":ip,
-                            "port":port,
-                            "response_time":response_time,
-                            "connection_time":connection_time
+                            "ip": ip,
+                            "port": port,
+                            "country": country, 
+                            "response_time": response_time,
+                            "connection_time": connection_time,
+                            "type": proxy_type,
+                            "anonymity": anonymity
                             }
                         )
         
