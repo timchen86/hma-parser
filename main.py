@@ -90,6 +90,7 @@ class ParseHMA:
             r = self.parse_ip_port(p)
             new_proxy += r
 
+        logging.info("len of new_proxy: %d", len(new_proxy))
 
         if new_proxy:
             self.post_parse(new_proxy, if_delete=False)
