@@ -257,7 +257,6 @@ class ParseHMA:
                 pass
 
             if( ip and port ):
-                #list_result.append("%s:%s"%(ip,port))
                 list_result.append( 
                         {
                             "ip": ip,
