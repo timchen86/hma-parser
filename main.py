@@ -1,21 +1,14 @@
-"""A simple webapp2 server."""
-import socket
 import json
 import re
 import webapp2
-import urllib2
-import time
-import datetime
 import urlparse
-from datetime import timedelta
-from google.appengine.ext import db
 from lxml import etree
 import lxml.html
-from io import StringIO
 import random
 
 import sys
 sys.path.insert(0, 'libs')
+
 from BeautifulSoup import BeautifulSoup 
 
 import requests
@@ -23,7 +16,6 @@ from requests.adapters import HTTPAdapter
 
 import logging
 logger = logging.getLogger(__name__)
-
 
 from globals import URL_BASE 
 from globals import X_PARSE_APPLICATION_ID 
@@ -36,7 +28,6 @@ from globals import PARSE_BATCH_LIMIT
 from globals import REQUESTS_MAX_RETRIES
 from globals import REQUESTS_TIMEOUT
 from globals import URL_PARSE_QUERY_LIMIT
-
     
 import itertools
 from itertools import tee, izip
