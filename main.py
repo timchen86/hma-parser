@@ -214,13 +214,13 @@ class ParseHMA:
 
             try:
                 # anonymity
-                anonymity = td_anonymity.text
+                anonymity = td_anonymity.text.strip()
 
                 # proxy_type
-                proxy_type = td_type.text
+                proxy_type = td_type.text.strip()
 
                 # country
-                country = td_country.attrib.get("rel")
+                country = td_country.attrib.get("rel").strip()
 
                 # response_time
                 response_time_ = td_rtime.find('div').find('div').attrib.get("style")
