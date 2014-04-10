@@ -69,7 +69,7 @@ class ParseHMA:
         self.session.headers = headers
 
 
-        #
+        # get current proxies, will delete them afterward
         current_proxy = self.get_proxy()
 
         logging.info("len of current_proxy: %d", len(current_proxy))
@@ -79,6 +79,7 @@ class ParseHMA:
             self.get_pages_dbg()
         else:
             main_page = self.get_main_page()
+            # get other pages from main_page
             pagination = self.parse_pagination(main_page)
             pages_after = self.get_pages(pagination)
             pages = [main_page] + pages_after
@@ -86,13 +87,15 @@ class ParseHMA:
         new_proxy = []
 
         for p in pages:
-            r = self.parse_ip_port(p)
+            r = self.parse_page(p)
             new_proxy += r
 
         logging.info("len of new_proxy: %d", len(new_proxy))
 
         if new_proxy:
+            # push new proxy to Parse
             self.post_parse(new_proxy, if_delete=False)
+            # remove old proxy
             self.post_parse(current_proxy, if_delete=True)
 
     def make_batch(self, list_, if_delete=False):
@@ -124,43 +127,40 @@ class ParseHMA:
 
         return list_request
     
-    def http_get(self, url):
-        logging.info("http_get(): %s"%(url))
+    def http_get(self, url, params=None, data=None, timeout=REQUESTS_TIMEOUT):
+        logging.info("http_get(): %s, %s"%(url, params))
             
-        response = self.session.get(url, timeout=REQUESTS_TIMEOUT)
+        if data:
+            logging.info(data)
+            response = self.session.post(url, params=params, data=data, timeout=timeout)
+        else:
+            response = self.session.get(url, params=params, timeout=timeout)
 
         if response.status_code != 200:
+            logging.info(response.text)
             raise BaseException("http_get(): response_code != 200")
         else:
-            return response.text
+            return response
 
     def get_proxy(self):
         payload = {"limit": URL_PARSE_QUERY_LIMIT}
-        response = self.session.get(URL_PARSE_PROXY, params=payload, timeout=REQUESTS_TIMEOUT)
+        response = self.http_get(URL_PARSE_PROXY, params=payload)
+        response_json = response.json()
 
-        if response.status_code != 200:
-            logging.error(response.text)
-            raise BaseException("get_proxy(): response_code != 200")
-        else:
-            result = response.json()
-            return result.get("results")
+        return response_json.get("results")
 
     def post_parse(self, proxy, if_delete):
-        logging.info("post_parse()")
 
         batches = self.make_batch(proxy, if_delete)
 
         for b in batches:
             data = json.dumps(b)
-            response = self.session.post(URL_PARSE_BATCH, data=data, timeout=REQUESTS_TIMEOUT)
-            logger.info(response.text)
-            if response.status_code != 200:
-                raise BaseException("response_code != 200")
-            else:
-                pass
+            #response = self.session.post(URL_PARSE_BATCH, data=data, timeout=REQUESTS_TIMEOUT)
+            response = self.http_get(URL_PARSE_BATCH, data=data)
+            # should check: if all returns success
         
     def get_main_page(self):
-        return self.http_get(URL_BASE)
+        return self.http_get(URL_BASE).text
 
     def get_pages_dbg(self):
         pages = []
@@ -175,7 +175,7 @@ class ParseHMA:
         pages = []
         for p in pagination:
             url = urlparse.urljoin(URL_BASE, p)
-            response_text = self.http_get(url)
+            response_text = self.http_get(url).text
 
             pages.append(response_text)
 
@@ -190,7 +190,7 @@ class ParseHMA:
         return div_pagination
 
 
-    def parse_ip_port(self, page):
+    def parse_page(self, page):
         def pairwise(iterable):
             a, b = tee(iterable)
             next(b, None)
@@ -211,7 +211,7 @@ class ParseHMA:
         td_ip_port_ = grouper(8, td_ip_port_)
 
         td_ip_port = [ [x[1],x[2],x[4],x[5]] for x in td_ip_port_ ]
-        list_ip_port = []
+        list_result = []
 
         for td_ip, td_port, td_rtime, td_ctime in td_ip_port:
             ip = ""
@@ -252,8 +252,8 @@ class ParseHMA:
                 pass
 
             if( ip and port ):
-                #list_ip_port.append("%s:%s"%(ip,port))
-                list_ip_port.append( 
+                #list_result.append("%s:%s"%(ip,port))
+                list_result.append( 
                         {
                             "ip":ip,
                             "port":port,
@@ -262,9 +262,9 @@ class ParseHMA:
                             }
                         )
         
-        logger.info(list_ip_port)
-        logger.info(len(list_ip_port))
-        return list_ip_port
+        logger.info(list_result)
+        logger.info("len of above: %d" % len(list_result))
+        return list_result
         
 
 class mainPage(webapp2.RequestHandler):
